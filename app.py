@@ -11,13 +11,13 @@ st.set_page_config(page_title="Cek Link Phishing", page_icon="🛡️", layout="
 st.markdown("""
 <style>
 .hero {
-    background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+    background: linear-gradient(135deg, #1D4ED8 0%, #0EA5E9 100%);
     padding: 2rem 1.75rem;
     border-radius: 20px;
     margin-bottom: 1.5rem;
 }
 .hero-judul { color: white; font-size: 2rem; font-weight: 800; margin-bottom: .4rem; }
-.hero-teks { color: #E0E7FF; font-size: 1.05rem; line-height: 1.5; }
+.hero-teks { color: #E0F2FE; font-size: 1.05rem; line-height: 1.5; }
 .kartu {
     background: white;
     border: 1px solid #E2E8F0;
@@ -47,7 +47,7 @@ st.markdown("""
 }
 .url-protokol { color: #94A3B8; }
 .url-domain { color: #FDE68A; background: rgba(253, 230, 138, .15); padding: 0 4px; border-radius: 4px; font-weight: 700; }
-.url-sisa { color: #A5B4FC; }
+.url-sisa { color: #93C5FD; }
 .label-kecil { font-size: .85rem; color: #64748B; margin: .4rem 0 .6rem 0; }
 </style>
 """, unsafe_allow_html=True)
