@@ -31,10 +31,12 @@ st.markdown("""
 .hasil { border-radius: 20px; padding: 1.5rem; text-align: center; margin: 1rem 0 .6rem 0; }
 .hasil-bahaya { background: #FEF2F2; border: 2px solid #FCA5A5; }
 .hasil-aman { background: #F0FDF4; border: 2px solid #86EFAC; }
+.hasil-ragu { background: #FFFBEB; border: 2px solid #FCD34D; }
 .hasil-emoji { font-size: 3rem; line-height: 1.1; }
 .hasil-judul { font-size: 1.45rem; font-weight: 800; margin: .5rem 0 .3rem 0; }
 .hasil-bahaya .hasil-judul { color: #B91C1C; }
 .hasil-aman .hasil-judul { color: #15803D; }
+.hasil-ragu .hasil-judul { color: #B45309; }
 .hasil-angka { color: #475569; }
 .url-bedah {
     font-family: ui-monospace, Consolas, monospace;
@@ -114,6 +116,15 @@ def kartu(ikon, judul, isi):
     st.markdown(
         f'<div class="kartu"><div class="kartu-judul">{ikon} {judul}</div>'
         f'<div class="kartu-isi">{isi}</div></div>',
+        unsafe_allow_html=True,
+    )
+
+
+def kartu_hasil(jenis, emoji, judul, keterangan):
+    st.markdown(
+        f'<div class="hasil hasil-{jenis}"><div class="hasil-emoji">{emoji}</div>'
+        f'<div class="hasil-judul">{judul}</div>'
+        f'<div class="hasil-angka">{keterangan}</div></div>',
         unsafe_allow_html=True,
     )
 
@@ -238,19 +249,35 @@ if st.button("🔍 Periksa Sekarang", type="primary"):
         X = pd.DataFrame([f])[fitur_url]
         peluang = float(model.predict_proba(X)[0][0])  # kolom 0 = phishing
 
-        if peluang >= 0.5:
-            st.markdown(
-                '<div class="hasil hasil-bahaya"><div class="hasil-emoji">🚨</div>'
-                '<div class="hasil-judul">Hati-hati, link ini mencurigakan!</div>'
-                f'<div class="hasil-angka">Peluang phishing menurut model: <b>{peluang:.1%}</b></div></div>',
-                unsafe_allow_html=True,
+        # Kalau link panjang, cek juga halaman utamanya (model lebih kuat di halaman utama)
+        protokol, host, ekor = pecah_url(url)
+        link_panjang = bool(ekor.strip("/"))
+        peluang_utama = None
+        if link_panjang:
+            url_utama = f"{protokol}://{host}"
+            X_utama = pd.DataFrame([ekstrak_fitur(url_utama)])[fitur_url]
+            peluang_utama = float(model.predict_proba(X_utama)[0][0])
+
+        if peluang >= 0.5 and link_panjang and peluang_utama < 0.5:
+            kartu_hasil(
+                "ragu", "🤔", "Perlu dicek lagi",
+                f"Link lengkap: <b>{peluang:.1%}</b> phishing &nbsp;•&nbsp; "
+                f"Halaman utama: <b>{peluang_utama:.1%}</b> phishing",
+            )
+            st.info(
+                "Model menilai **link lengkapnya** mencurigakan, tapi **halaman utamanya** terlihat aman. "
+                "Model ini lemah untuk link panjang, jadi bisa jadi ini **alarm palsu**. "
+                "Pastikan nama domainnya memang situs yang kamu kenal sebelum mengisi data apa pun."
+            )
+        elif peluang >= 0.5:
+            kartu_hasil(
+                "bahaya", "🚨", "Hati-hati, link ini mencurigakan!",
+                f"Peluang phishing menurut model: <b>{peluang:.1%}</b>",
             )
         else:
-            st.markdown(
-                '<div class="hasil hasil-aman"><div class="hasil-emoji">✅</div>'
-                '<div class="hasil-judul">Link ini terlihat aman</div>'
-                f'<div class="hasil-angka">Peluang phishing menurut model: <b>{peluang:.1%}</b></div></div>',
-                unsafe_allow_html=True,
+            kartu_hasil(
+                "aman", "✅", "Link ini terlihat aman",
+                f"Peluang phishing menurut model: <b>{peluang:.1%}</b>",
             )
         st.progress(peluang)
 
@@ -267,12 +294,11 @@ if st.button("🔍 Periksa Sekarang", type="primary"):
                   "Tetap cek ulang nama domainnya ya, karena penipu juga bisa bikin link yang terlihat rapi.")
         st.caption("Daftar ini adalah pengamatan sederhana terhadap link, bukan penjelasan lengkap cara model mengambil keputusan.")
 
-        _, _, ekor = pecah_url(url)
-        if ekor.strip("/"):
+        if link_panjang:
             st.warning(
                 "**Catatan:** model ini dilatih sebagian besar dengan link **halaman utama** situs "
                 "(contoh: `https://www.namasitus.com`). Untuk link yang panjang, seperti halaman produk, "
-                "hasil pencarian, atau artikel, hasilnya **bisa keliru**. Coba juga cek alamat halaman utamanya."
+                "hasil pencarian, atau artikel, hasilnya **bisa keliru**. Karena itu, halaman utamanya juga ikut dicek."
             )
 
 # ================= BAGIAN 2: EDUKASI =================
@@ -355,8 +381,8 @@ with st.expander("ℹ️ Tentang aplikasi ini"):
         "235.370 URL setelah pembersihan.\n\n"
         "**Hasil pengujian** (data dibagi berdasarkan domain): akurasi 99,81%, recall phishing 99,58%.\n\n"
         "**Keterbatasan:** dataset memiliki bias pengumpulan data. Misalnya, seluruh URL legitimate berupa halaman "
-        "utama dan memakai HTTPS. Karena itu, akurasi tinggi di data uji belum tentu sama di dunia nyata, terutama "
-        "untuk link yang panjang.\n\n"
+        "utama dan memakai HTTPS. Karena itu, model lemah untuk link panjang. Untuk mengurangi alarm palsu, "
+        "aplikasi juga mengecek halaman utama dari link yang panjang.\n\n"
         "**Dibuat oleh:** 231344049 - Marsya Eka Pratiwi Nugroho"
     )
 
