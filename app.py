@@ -142,7 +142,7 @@ def tampil_bedah_url(url):
         f'<span class="url-protokol">{html.escape(protokol)}://</span>'
         f'<span class="url-domain">{html.escape(host)}</span>'
         f'<span class="url-sisa">{html.escape(ekor)}</span></div>'
-        f'<div class="label-kecil">⚪ protokol &nbsp;&nbsp; 🟡 nama domain &nbsp;&nbsp; 🟣 halaman / parameter</div>',
+        f'<div class="label-kecil">⚪ protokol &nbsp;&nbsp; 🟡 nama domain &nbsp;&nbsp; 🔵 halaman / parameter</div>',
         unsafe_allow_html=True,
     )
     utama = domain_utama(host)
@@ -206,210 +206,149 @@ st.markdown(
     '<div class="hero">'
     '<div class="hero-judul">🛡️ Cek Dulu, Klik Kemudian</div>'
     '<div class="hero-teks">Ragu sama sebuah link? Tempel di sini, biar model <i>machine learning</i> bantu menilai. '
-    'Sekalian, yuk belajar mengenali ciri-ciri link phishing!</div>'
+    'Sekalian, yuk belajar mengenali ciri-ciri link phishing di bawah!</div>'
     '</div>',
     unsafe_allow_html=True,
 )
 
-tab_cek, tab_belajar, tab_kuis, tab_tentang = st.tabs(
-    ["🔍 Cek Link", "🎓 Kenali Phishing", "🧠 Kuis Singkat", "ℹ️ Tentang"]
+# ================= BAGIAN 1: CEK LINK =================
+st.text_input("Tempel link di sini 👇", key="url", placeholder="https://www.contoh.com")
+
+st.caption("Belum punya link buat dicoba? Pakai contoh ini:")
+contoh = [
+    ("Google", "https://www.google.com"),
+    ("Wikipedia", "https://www.wikipedia.org"),
+    ("Alamat IP", "http://192.168.10.5/login/verify.php"),
+    ("Link aneh", "http://login-verifikasi-akun.xyz/update.php?id=8821"),
+]
+kolom = st.columns(len(contoh))
+for k, (nama, u) in zip(kolom, contoh):
+    k.button(nama, on_click=isi_contoh, args=(u,))
+
+st.write("")
+if st.button("🔍 Periksa Sekarang", type="primary"):
+    url = st.session_state["url"].strip()
+
+    if not url:
+        st.info("Eits, link-nya belum diisi nih 😄")
+    elif not re.match(r"^https?://", url):
+        st.warning("Tulis link lengkap dengan `http://` atau `https://` di depannya ya, misalnya `https://www.google.com`")
+    else:
+        f = ekstrak_fitur(url)
+        X = pd.DataFrame([f])[fitur_url]
+        peluang = float(model.predict_proba(X)[0][0])  # kolom 0 = phishing
+
+        if peluang >= 0.5:
+            st.markdown(
+                '<div class="hasil hasil-bahaya"><div class="hasil-emoji">🚨</div>'
+                '<div class="hasil-judul">Hati-hati, link ini mencurigakan!</div>'
+                f'<div class="hasil-angka">Peluang phishing menurut model: <b>{peluang:.1%}</b></div></div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                '<div class="hasil hasil-aman"><div class="hasil-emoji">✅</div>'
+                '<div class="hasil-judul">Link ini terlihat aman</div>'
+                f'<div class="hasil-angka">Peluang phishing menurut model: <b>{peluang:.1%}</b></div></div>',
+                unsafe_allow_html=True,
+            )
+        st.progress(peluang)
+
+        st.markdown("#### 🔬 Bedah link ini")
+        tampil_bedah_url(url)
+
+        st.markdown("#### 🧐 Ciri yang terdeteksi")
+        ciri = daftar_ciri(url, f)
+        if ciri:
+            for ikon, judul, isi in ciri:
+                kartu(ikon, judul, isi)
+        else:
+            kartu("👍", "Nggak ada ciri mencurigakan yang menonjol",
+                  "Tetap cek ulang nama domainnya ya, karena penipu juga bisa bikin link yang terlihat rapi.")
+        st.caption("Daftar ini adalah pengamatan sederhana terhadap link, bukan penjelasan lengkap cara model mengambil keputusan.")
+
+        _, _, ekor = pecah_url(url)
+        if ekor.strip("/"):
+            st.warning(
+                "**Catatan:** model ini dilatih sebagian besar dengan link **halaman utama** situs "
+                "(contoh: `https://www.namasitus.com`). Untuk link yang panjang, seperti halaman produk, "
+                "hasil pencarian, atau artikel, hasilnya **bisa keliru**. Coba juga cek alamat halaman utamanya."
+            )
+
+# ================= BAGIAN 2: EDUKASI =================
+st.divider()
+st.markdown("## 🎓 Yuk, kenali phishing!")
+
+st.markdown("### 🎣 Apa itu phishing?")
+st.write(
+    "Phishing berasal dari kata *fishing* (memancing). Penipu \"memancing\" kamu pakai umpan berupa pesan "
+    "atau situs palsu yang mirip aslinya, supaya kamu mau menyerahkan data penting seperti password, PIN, "
+    "kode OTP, atau nomor kartu."
 )
 
-# ================= TAB 1: CEK LINK =================
-with tab_cek:
-    st.text_input("Tempel link di sini 👇", key="url", placeholder="https://www.contoh.com")
+st.markdown("### 🔬 Cara membaca link dengan benar")
+st.write(
+    "Trik yang paling sering dipakai: nama situs terkenal ditaruh di **depan**, padahal pemilik aslinya "
+    "ada di **belakang**. Coba lihat contoh ini:"
+)
+tampil_bedah_url("https://bankku.co.id.verifikasi-akun.xyz/login")
+st.info(
+    "💡 **Rumus gampang:** cari tanda `/` pertama setelah `://`, lalu baca nama domain **dari kanan**. "
+    "Di contoh atas, pemiliknya `verifikasi-akun.xyz`, bukan `bankku.co.id`!"
+)
 
-    st.caption("Belum punya link buat dicoba? Pakai contoh ini:")
-    contoh = [
-        ("Google", "https://www.google.com"),
-        ("Wikipedia", "https://www.wikipedia.org"),
-        ("Alamat IP", "http://192.168.10.5/login/verify.php"),
-        ("Link aneh", "http://login-verifikasi-akun.xyz/update.php?id=8821"),
-    ]
-    kolom = st.columns(len(contoh))
-    for k, (nama, u) in zip(kolom, contoh):
-        k.button(nama, on_click=isi_contoh, args=(u,))
-
-    st.write("")
-    if st.button("🔍 Periksa Sekarang", type="primary"):
-        url = st.session_state["url"].strip()
-
-        if not url:
-            st.info("Eits, link-nya belum diisi nih 😄")
-        elif not re.match(r"^https?://", url):
-            st.warning("Tulis link lengkap dengan `http://` atau `https://` di depannya ya, misalnya `https://www.google.com`")
-        else:
-            f = ekstrak_fitur(url)
-            X = pd.DataFrame([f])[fitur_url]
-            peluang = float(model.predict_proba(X)[0][0])  # kolom 0 = phishing
-
-            if peluang >= 0.5:
-                st.markdown(
-                    '<div class="hasil hasil-bahaya"><div class="hasil-emoji">🚨</div>'
-                    '<div class="hasil-judul">Hati-hati, link ini mencurigakan!</div>'
-                    f'<div class="hasil-angka">Peluang phishing menurut model: <b>{peluang:.1%}</b></div></div>',
-                    unsafe_allow_html=True,
-                )
-            else:
-                st.markdown(
-                    '<div class="hasil hasil-aman"><div class="hasil-emoji">✅</div>'
-                    '<div class="hasil-judul">Link ini terlihat aman</div>'
-                    f'<div class="hasil-angka">Peluang phishing menurut model: <b>{peluang:.1%}</b></div></div>',
-                    unsafe_allow_html=True,
-                )
-            st.progress(peluang)
-
-            st.subheader("🔬 Bedah link ini")
-            tampil_bedah_url(url)
-
-            st.subheader("🧐 Ciri yang terdeteksi")
-            ciri = daftar_ciri(url, f)
-            if ciri:
-                for ikon, judul, isi in ciri:
-                    kartu(ikon, judul, isi)
-            else:
-                kartu("👍", "Nggak ada ciri mencurigakan yang menonjol",
-                      "Tetap cek ulang nama domainnya ya, karena penipu juga bisa bikin link yang terlihat rapi.")
-            st.caption("Daftar ini adalah pengamatan sederhana terhadap link, bukan penjelasan lengkap cara model mengambil keputusan.")
-
-            _, _, ekor = pecah_url(url)
-            if ekor.strip("/"):
-                st.warning(
-                    "**Catatan:** model ini dilatih sebagian besar dengan link **halaman utama** situs "
-                    "(contoh: `https://www.namasitus.com`). Untuk link yang panjang, seperti halaman produk, "
-                    "hasil pencarian, atau artikel, hasilnya **bisa keliru**. Coba juga cek alamat halaman utamanya."
-                )
-
-# ================= TAB 2: KENALI PHISHING =================
-with tab_belajar:
-    st.markdown("### 🎣 Apa itu phishing?")
-    st.write(
-        "Phishing berasal dari kata *fishing* (memancing). Penipu \"memancing\" kamu pakai umpan berupa pesan "
-        "atau situs palsu yang mirip aslinya, supaya kamu mau menyerahkan data penting seperti password, PIN, "
-        "kode OTP, atau nomor kartu."
-    )
-
-    st.markdown("### 🔬 Cara membaca link dengan benar")
-    st.write(
-        "Trik yang paling sering dipakai: nama situs terkenal ditaruh di **depan**, padahal pemilik aslinya "
-        "ada di **belakang**. Coba lihat contoh ini:"
-    )
-    tampil_bedah_url("https://bankku.co.id.verifikasi-akun.xyz/login")
-    st.info(
-        "💡 **Rumus gampang:** cari tanda `/` pertama setelah `://`, lalu baca nama domain **dari kanan**. "
-        "Di contoh atas, pemiliknya `verifikasi-akun.xyz`, bukan `bankku.co.id`!"
-    )
-
-    st.markdown("### 🚩 Ciri-ciri link phishing")
-    ciri_umum = [
-        ("🔤", "Nama mirip tapi beda",
-         "Huruf diganti atau ditambah, misalnya <code>g00gle.com</code> atau <code>tokoku-promo.shop</code>. "
-         "Sekilas mirip, padahal beda pemilik."),
-        ("🧩", "Nama terkenal di depan",
-         "Contohnya <code>bankku.co.id.verifikasi-akun.xyz</code>. Pemilik aslinya ada di bagian paling belakang."),
-        ("🔢", "Pakai alamat IP",
-         "Misalnya <code>http://103.21.45.7/login</code>. Situs resmi hampir selalu pakai nama domain."),
-        ("🔓", "Gembok bukan jaminan",
-         "Gembok 🔒 (HTTPS) cuma berarti koneksinya terenkripsi, bukan berarti situsnya jujur. "
-         "Di dataset proyek ini, <b>49.378 URL phishing</b> ternyata memakai HTTPS!"),
-        ("✳️", "Panjang dan penuh simbol",
-         "Deretan angka, tanda <code>-</code>, <code>%</code>, atau parameter acak bisa dipakai untuk menyamarkan alamat asli."),
-        ("🎣", "Kata pancingan",
-         "Kata seperti <i>verifikasi, blokir, hadiah, login, update</i> dipakai supaya kamu panik atau tergiur."),
-        ("⏰", "Pesan yang bikin buru-buru",
-         "\"Akun diblokir dalam 5 menit!\" Penipu ingin kamu panik sampai lupa mengecek."),
-        ("🏷️", "Akhiran domain janggal",
-         "Situs yang mengaku bank atau instansi tapi berakhiran <code>.xyz</code>, <code>.top</code>, atau "
-         "<code>.click</code> patut dicurigai. Situs instansi pemerintah Indonesia memakai <code>.go.id</code>."),
-    ]
-    kiri, kanan = st.columns(2)
-    for i, (ikon, judul, isi) in enumerate(ciri_umum):
-        with (kiri if i % 2 == 0 else kanan):
-            kartu(ikon, judul, isi)
-
-    st.markdown("### ✅ Kebiasaan aman sebelum klik")
-    st.markdown(
-        "- **Ketik sendiri** alamat situs resmi, atau buka lewat aplikasi resmi, daripada klik link dari pesan.\n"
-        "- **Cek nama domain** pakai rumus baca dari kanan tadi.\n"
-        "- **Jangan pernah bagikan kode OTP**, PIN, atau password ke siapa pun, termasuk yang mengaku petugas.\n"
-        "- **Aktifkan verifikasi dua langkah (2FA)** di akun-akun penting.\n"
-        "- **Tenang dulu.** Pesan yang bikin panik atau terlalu menggiurkan patut dicurigai."
-    )
-
-    st.markdown("### 🆘 Terlanjur klik atau isi data?")
-    st.markdown(
-        "1. **Ganti password** akun yang terdampak secepatnya, lewat aplikasi atau situs resmi.\n"
-        "2. Kalau yang bocor data bank atau kartu, **hubungi bank** lewat nomor resmi yang tertera di kartu "
-        "atau aplikasinya, lalu minta blokir.\n"
-        "3. **Simpan bukti**: screenshot pesan, link, dan bukti transfer.\n"
-        "4. **Laporkan** lewat kanal resmi:\n"
-        "    - Situs atau konten penipuan → [aduankonten.id](https://aduankonten.id)\n"
-        "    - Rekening penipu → [cekrekening.id](https://cekrekening.id)\n"
-        "    - Nomor HP penipu → [aduannomor.id](https://aduannomor.id)\n"
-        "    - Penipuan layanan keuangan → Kontak OJK **157**"
-    )
-
-# ================= TAB 3: KUIS =================
-SOAL = [
-    {
-        "tanya": "Siapa pemilik asli link ini? `https://bankku.co.id.verifikasi-akun.xyz/login`",
-        "pilihan": ["bankku.co.id", "verifikasi-akun.xyz", "login"],
-        "jawaban": "verifikasi-akun.xyz",
-        "bahas": "Baca nama domain dari kanan, sebelum tanda / pertama. Bagian bankku.co.id cuma \"hiasan\" di depan.",
-    },
-    {
-        "tanya": "Situs yang ada gembok 🔒 (HTTPS) pasti aman?",
-        "pilihan": ["Iya, pasti aman", "Belum tentu"],
-        "jawaban": "Belum tentu",
-        "bahas": "HTTPS cuma memastikan koneksinya terenkripsi, dan penipu juga bisa pakai HTTPS. "
-                 "Di dataset proyek ini, 49.378 URL phishing memakai HTTPS.",
-    },
-    {
-        "tanya": "Kamu dapat SMS: *\"Akun kamu DIBLOKIR! Aktifkan dalam 5 menit: http://103.21.45.7/aktivasi\"*. "
-                 "Apa yang paling mencurigakan?",
-        "pilihan": ["Ada kata \"akun\"", "Mendesak dan link-nya berupa alamat IP", "Dikirim lewat SMS"],
-        "jawaban": "Mendesak dan link-nya berupa alamat IP",
-        "bahas": "Penipu suka bikin panik pakai batas waktu, dan alamat IP dipakai untuk menyembunyikan identitas situs.",
-    },
-    {
-        "tanya": "Mana link yang paling mungkin asli milik toko online \"Tokoku\"?",
-        "pilihan": ["https://www.tokoku.com", "https://tokoku.com-promo.shop", "http://tok0ku.com"],
-        "jawaban": "https://www.tokoku.com",
-        "bahas": "Link kedua sebenarnya milik com-promo.shop, dan link ketiga mengganti huruf o dengan angka 0.",
-    },
+st.markdown("### 🚩 Ciri-ciri link phishing")
+ciri_umum = [
+    ("🔤", "Nama mirip tapi beda",
+     "Huruf diganti atau ditambah, misalnya <code>g00gle.com</code> atau <code>tokoku-promo.shop</code>. "
+     "Sekilas mirip, padahal beda pemilik."),
+    ("🧩", "Nama terkenal di depan",
+     "Contohnya <code>bankku.co.id.verifikasi-akun.xyz</code>. Pemilik aslinya ada di bagian paling belakang."),
+    ("🔢", "Pakai alamat IP",
+     "Misalnya <code>http://103.21.45.7/login</code>. Situs resmi hampir selalu pakai nama domain."),
+    ("🔓", "Gembok bukan jaminan",
+     "Gembok 🔒 (HTTPS) cuma berarti koneksinya terenkripsi, bukan berarti situsnya jujur. "
+     "Di dataset proyek ini, <b>49.378 URL phishing</b> ternyata memakai HTTPS!"),
+    ("✳️", "Panjang dan penuh simbol",
+     "Deretan angka, tanda <code>-</code>, <code>%</code>, atau parameter acak bisa dipakai untuk menyamarkan alamat asli."),
+    ("🎣", "Kata pancingan",
+     "Kata seperti <i>verifikasi, blokir, hadiah, login, update</i> dipakai supaya kamu panik atau tergiur."),
+    ("⏰", "Pesan yang bikin buru-buru",
+     "\"Akun diblokir dalam 5 menit!\" Penipu ingin kamu panik sampai lupa mengecek."),
+    ("🏷️", "Akhiran domain janggal",
+     "Situs yang mengaku bank atau instansi tapi berakhiran <code>.xyz</code>, <code>.top</code>, atau "
+     "<code>.click</code> patut dicurigai. Situs instansi pemerintah Indonesia memakai <code>.go.id</code>."),
 ]
+kiri, kanan = st.columns(2)
+for i, (ikon, judul, isi) in enumerate(ciri_umum):
+    with (kiri if i % 2 == 0 else kanan):
+        kartu(ikon, judul, isi)
 
-with tab_kuis:
-    st.markdown("### 🧠 Seberapa jago kamu mengenali phishing?")
-    st.caption("4 soal singkat. Santai aja, ini buat latihan kok 😄")
+st.markdown("### ✅ Kebiasaan aman sebelum klik")
+st.markdown(
+    "- **Ketik sendiri** alamat situs resmi, atau buka lewat aplikasi resmi, daripada klik link dari pesan.\n"
+    "- **Cek nama domain** pakai rumus baca dari kanan tadi.\n"
+    "- **Jangan pernah bagikan kode OTP**, PIN, atau password ke siapa pun, termasuk yang mengaku petugas.\n"
+    "- **Aktifkan verifikasi dua langkah (2FA)** di akun-akun penting.\n"
+    "- **Tenang dulu.** Pesan yang bikin panik atau terlalu menggiurkan patut dicurigai."
+)
 
-    with st.form("kuis"):
-        jawaban_user = []
-        for i, s in enumerate(SOAL, start=1):
-            jawaban_user.append(
-                st.radio(f"**{i}. {s['tanya']}**", s["pilihan"], index=None, key=f"soal_{i}")
-            )
-        kirim = st.form_submit_button("Cek jawabanku ✨", type="primary")
+st.markdown("### 🆘 Terlanjur klik atau isi data?")
+st.markdown(
+    "1. **Ganti password** akun yang terdampak secepatnya, lewat aplikasi atau situs resmi.\n"
+    "2. Kalau yang bocor data bank atau kartu, **hubungi bank** lewat nomor resmi yang tertera di kartu "
+    "atau aplikasinya, lalu minta blokir.\n"
+    "3. **Simpan bukti**: screenshot pesan, link, dan bukti transfer.\n"
+    "4. **Laporkan** lewat kanal resmi:\n"
+    "    - Situs atau konten penipuan → [aduankonten.id](https://aduankonten.id)\n"
+    "    - Rekening penipu → [cekrekening.id](https://cekrekening.id)\n"
+    "    - Nomor HP penipu → [aduannomor.id](https://aduannomor.id)\n"
+    "    - Penipuan layanan keuangan → Kontak OJK **157**"
+)
 
-    if kirim:
-        benar = sum(j == s["jawaban"] for j, s in zip(jawaban_user, SOAL))
-        if benar == len(SOAL):
-            st.balloons()
-            st.success(f"Keren banget! Skor kamu **{benar}/{len(SOAL)}** 🎉 Kamu udah siap menghadapi link phishing!")
-        elif benar >= 2:
-            st.info(f"Skor kamu **{benar}/{len(SOAL)}**. Udah lumayan! Cek pembahasannya biar makin jago 💪")
-        else:
-            st.warning(f"Skor kamu **{benar}/{len(SOAL)}**. Nggak apa-apa, yuk baca tab **Kenali Phishing** dulu 📚")
-
-        for i, (j, s) in enumerate(zip(jawaban_user, SOAL), start=1):
-            if j == s["jawaban"]:
-                st.markdown(f"✅ **Soal {i}:** benar! {s['bahas']}")
-            else:
-                st.markdown(f"❌ **Soal {i}:** jawabannya **{s['jawaban']}**. {s['bahas']}")
-
-# ================= TAB 4: TENTANG =================
-with tab_tentang:
-    st.markdown("### ℹ️ Tentang aplikasi ini")
+# ================= BAGIAN 3: TENTANG =================
+st.divider()
+with st.expander("ℹ️ Tentang aplikasi ini"):
     st.markdown(
         "**Model:** XGBoost, dilatih dengan 18 fitur yang dihitung dari teks URL saja.\n\n"
         "**Dataset:** [PhiUSIIL Phishing URL Dataset (UCI)](https://archive.ics.uci.edu/dataset/967/phiusiil+phishing+url+dataset), "
@@ -418,8 +357,7 @@ with tab_tentang:
         "**Keterbatasan:** dataset memiliki bias pengumpulan data. Misalnya, seluruh URL legitimate berupa halaman "
         "utama dan memakai HTTPS. Karena itu, akurasi tinggi di data uji belum tentu sama di dunia nyata, terutama "
         "untuk link yang panjang.\n\n"
-        "**Dibuat oleh:** 231344049 - Marsya Eka Pratiwi Nugroho"
+        "**Dibuat oleh:** ____"
     )
 
-st.divider()
 st.caption("⚠️ Hasil ini hanya alat bantu, bukan jaminan. Tetap waspada sebelum memasukkan data pribadi di situs mana pun.")
