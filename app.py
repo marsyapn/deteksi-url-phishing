@@ -357,7 +357,7 @@ with st.expander("ℹ️ Tentang aplikasi ini"):
         "**Keterbatasan:** dataset memiliki bias pengumpulan data. Misalnya, seluruh URL legitimate berupa halaman "
         "utama dan memakai HTTPS. Karena itu, akurasi tinggi di data uji belum tentu sama di dunia nyata, terutama "
         "untuk link yang panjang.\n\n"
-        "**Dibuat oleh:** ____"
+        "**Dibuat oleh:** 231344049 - Marsya Eka Pratiwi Nugroho"
     )
 
 st.caption("⚠️ Hasil ini hanya alat bantu, bukan jaminan. Tetap waspada sebelum memasukkan data pribadi di situs mana pun.")
