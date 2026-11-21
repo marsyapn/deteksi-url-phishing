@@ -56,51 +56,43 @@ st.markdown("""
 
 
 # ================= MODEL =================
+AMBANG_MERAH = 0.5
+AMBANG_KUNING = 0.3
+
+
 @st.cache_resource
 def muat_model():
-    model = joblib.load("model_xgboost_url.pkl")
-    fitur = joblib.load("fitur_url.pkl")
+    model = joblib.load("model_xgboost_domain.pkl")
+    fitur = joblib.load("fitur_domain.pkl")
     return model, fitur
 
 
-model, fitur_url = muat_model()
+model, fitur_dom = muat_model()
 
 
-# ================= EKSTRAKSI FITUR (sama dengan notebook, sudah divalidasi) =================
-def ekstrak_fitur(url, potong_akhir=True):
-    url_hitung = url[:-1] if potong_akhir else url
+# ================= FITUR NAMA DOMAIN (sama dengan notebook bab 13) =================
+def ambil_host(url):
+    host = url.split('://')[-1]
+    host = re.split(r'[/?#]', host)[0]
+    host = host.split(':')[0].lower()
+    host = re.sub(r'^www\.', '', host)
+    return host
 
-    domain = url.split('://')[-1].split('/')[0].split(':')[0]
-    tld = domain.split('.')[-1]
-    panjang = len(url_hitung)
 
-    inti = re.sub(r'^https?://', '', url_hitung)
-    inti = re.sub(r'^www\.', '', inti)
-
-    huruf = sum(c.isalpha() for c in inti)
-    angka = sum(c.isdigit() for c in inti)
-    spesial_lain = sum((not c.isalnum()) and c not in '=?&' for c in inti)
-    obfuskasi = len(re.findall(r'%[0-9a-fA-F]{2}', url_hitung))
-
+def fitur_domain(host):
+    bagian = host.split('.')
+    angka = sum(c.isdigit() for c in host)
     return {
-        'URLLength': panjang,
-        'DomainLength': len(domain),
-        'IsDomainIP': 1 if re.fullmatch(r'\d{1,3}(\.\d{1,3}){3}', domain) else 0,
-        'TLDLength': len(tld),
-        'NoOfSubDomain': max(domain.count('.') - 1, 0),
-        'HasObfuscation': 1 if obfuskasi > 0 else 0,
-        'NoOfObfuscatedChar': obfuskasi,
-        'ObfuscationRatio': obfuskasi / panjang,
-        'NoOfLettersInURL': huruf,
-        'LetterRatioInURL': huruf / panjang,
-        'NoOfDegitsInURL': angka,
-        'DegitRatioInURL': angka / panjang,
-        'NoOfEqualsInURL': url_hitung.count('='),
-        'NoOfQMarkInURL': url_hitung.count('?'),
-        'NoOfAmpersandInURL': url_hitung.count('&'),
-        'NoOfOtherSpecialCharsInURL': spesial_lain,
-        'SpacialCharRatioInURL': spesial_lain / panjang,
-        'IsHTTPS': 1 if url.startswith('https://') else 0,
+        'panjang': len(host),
+        'jumlah_titik': host.count('.'),
+        'jumlah_strip': host.count('-'),
+        'jumlah_angka': angka,
+        'rasio_angka': angka / max(len(host), 1),
+        'spesial_lain': sum((not c.isalnum()) and c not in '.-' for c in host),
+        'panjang_tld': len(bagian[-1]),
+        'bagian_terpanjang': max(len(b) for b in bagian),
+        'is_ip': 1 if re.fullmatch(r'\d{1,3}(\.\d{1,3}){3}', host) else 0,
+        'punycode': 1 if 'xn--' in host else 0,
     }
 
 
@@ -166,40 +158,38 @@ def tampil_bedah_url(url):
         st.markdown("🏠 Link ini memakai **alamat IP**, jadi nggak ada nama pemilik situs yang bisa dibaca.")
 
 
-def daftar_ciri(url, f):
+def daftar_ciri(url, host):
     ciri = []
-    if f['IsHTTPS'] == 0:
+    is_ip = re.fullmatch(r"\d{1,3}(\.\d{1,3}){3}", host) is not None
+    if not url.startswith("https://"):
         ciri.append(("🔓", "Tidak memakai HTTPS",
                      "Data yang kamu ketik, misalnya password, dikirim tanpa enkripsi sehingga lebih mudah disadap. "
                      "Situs resmi zaman sekarang hampir selalu pakai HTTPS."))
-    if f['IsDomainIP'] == 1:
+    if is_ip:
         ciri.append(("🔢", "Memakai alamat IP, bukan nama domain",
                      "Situs resmi biasanya punya nama yang jelas. Deretan angka seperti <code>192.168.1.1</code> "
                      "sering dipakai untuk menyembunyikan identitas pemilik situs."))
-    if f['URLLength'] > 50:
-        ciri.append(("📏", f"Link cukup panjang ({f['URLLength']} karakter)",
-                     "Link panjang bisa dipakai untuk menyembunyikan alamat asli di tengah teks yang membingungkan. "
-                     "Tapi ingat, link panjang belum tentu berbahaya, contohnya halaman produk di toko online."))
-    if f['NoOfDegitsInURL'] >= 5:
-        ciri.append(("🧮", f"Banyak angka ({f['NoOfDegitsInURL']} angka)",
+    angka = sum(c.isdigit() for c in host)
+    if not is_ip and angka >= 4:
+        ciri.append(("🧮", f"Banyak angka di nama domain ({angka} angka)",
                      "Nama situs resmi jarang berisi deretan angka acak. Angka juga sering dipakai untuk meniru huruf, "
                      "misalnya <code>g00gle</code> (huruf o diganti angka 0)."))
-    if f['NoOfOtherSpecialCharsInURL'] >= 5:
-        ciri.append(("✳️", f"Banyak karakter spesial ({f['NoOfOtherSpecialCharsInURL']} karakter)",
-                     "Banyak tanda seperti <code>-</code>, <code>_</code>, <code>.</code>, atau <code>/</code> "
-                     "bisa bikin link terlihat rumit dan menyamarkan alamat aslinya."))
-    if f['NoOfSubDomain'] >= 2:
+    if host.count("-") >= 2:
+        ciri.append(("➖", f"Banyak tanda strip di nama domain ({host.count('-')} tanda)",
+                     "Nama seperti <code>login-verifikasi-akun</code> sering dipakai untuk meniru layanan resmi "
+                     "dan membuat link terlihat meyakinkan."))
+    if not is_ip and host.count(".") >= 3:
         ciri.append(("🧩", "Banyak subdomain",
                      "Penipu sering menaruh nama situs terkenal di depan, misalnya "
                      "<code>namabank.co.id.situs-palsu.xyz</code>. Padahal pemilik aslinya ada di bagian paling belakang."))
-    if f['HasObfuscation'] == 1:
+    if "xn--" in host:
+        ciri.append(("🔤", "Memakai huruf tiruan (punycode)",
+                     "Kode <code>xn--</code> menandakan huruf dari alfabet lain yang bentuknya mirip huruf biasa, "
+                     "trik untuk meniru nama situs terkenal."))
+    if re.search(r"%[0-9a-fA-F]{2}", url):
         ciri.append(("🕶️", "Ada karakter yang disamarkan",
                      "Kode seperti <code>%20</code> atau <code>%2F</code> bisa dipakai untuk menyembunyikan karakter asli "
                      "supaya link sulit dibaca manusia."))
-    if f['NoOfQMarkInURL'] > 0 or f['NoOfEqualsInURL'] > 0:
-        ciri.append(("❓", "Mengandung parameter (tanda ? atau =)",
-                     "Parameter itu normal di banyak situs, misalnya halaman pencarian. Tapi kalau muncul di link "
-                     "dari orang tak dikenal, perhatikan baik-baik isinya."))
     kata = [k for k in KATA_PANCINGAN if k in url.lower()]
     if kata:
         ciri.append(("🎣", "Ada kata pancingan",
@@ -245,47 +235,30 @@ if st.button("🔍 Periksa Sekarang", type="primary"):
     elif not re.match(r"^https?://", url):
         st.warning("Tulis link lengkap dengan `http://` atau `https://` di depannya ya, misalnya `https://www.google.com`")
     else:
-        f = ekstrak_fitur(url)
-        X = pd.DataFrame([f])[fitur_url]
+        host = ambil_host(url)
+        X = pd.DataFrame([fitur_domain(host)])[fitur_dom]
         peluang = float(model.predict_proba(X)[0][0])  # kolom 0 = phishing
+        keterangan = f"Peluang phishing menurut model: <b>{peluang:.1%}</b>"
 
-        # Kalau link panjang, cek juga halaman utamanya (model lebih kuat di halaman utama)
-        protokol, host, ekor = pecah_url(url)
-        link_panjang = bool(ekor.strip("/"))
-        peluang_utama = None
-        if link_panjang:
-            url_utama = f"{protokol}://{host}"
-            X_utama = pd.DataFrame([ekstrak_fitur(url_utama)])[fitur_url]
-            peluang_utama = float(model.predict_proba(X_utama)[0][0])
-
-        if peluang >= 0.5 and link_panjang and peluang_utama < 0.5:
-            kartu_hasil(
-                "ragu", "🤔", "Perlu dicek lagi",
-                f"Link lengkap: <b>{peluang:.1%}</b> phishing &nbsp;•&nbsp; "
-                f"Halaman utama: <b>{peluang_utama:.1%}</b> phishing",
-            )
-            st.info(
-                "Model menilai **link lengkapnya** mencurigakan, tapi **halaman utamanya** terlihat aman. "
-                "Model ini lemah untuk link panjang, jadi bisa jadi ini **alarm palsu**. "
-                "Pastikan nama domainnya memang situs yang kamu kenal sebelum mengisi data apa pun."
-            )
-        elif peluang >= 0.5:
-            kartu_hasil(
-                "bahaya", "🚨", "Hati-hati, link ini mencurigakan!",
-                f"Peluang phishing menurut model: <b>{peluang:.1%}</b>",
-            )
+        if peluang >= AMBANG_MERAH:
+            kartu_hasil("bahaya", "🚨", "Hati-hati, link ini mencurigakan!", keterangan)
+        elif peluang >= AMBANG_KUNING:
+            kartu_hasil("ragu", "🤔", "Perlu hati-hati", keterangan)
+            st.info("Model belum yakin. Cek lagi nama domainnya sebelum mengisi data apa pun.")
         else:
-            kartu_hasil(
-                "aman", "✅", "Link ini terlihat aman",
-                f"Peluang phishing menurut model: <b>{peluang:.1%}</b>",
+            kartu_hasil("aman", "✅", "Tidak terdeteksi mencurigakan", keterangan)
+            st.caption(
+                "Artinya nama domainnya nggak menunjukkan ciri phishing yang menonjol, **bukan jaminan aman**. "
+                "Banyak situs phishing memakai nama domain yang terlihat normal."
             )
         st.progress(peluang)
 
         st.markdown("#### 🔬 Bedah link ini")
         tampil_bedah_url(url)
+        st.caption("Model hanya menilai bagian 🟡 **nama domain** (tanpa `www.`), bukan protokol atau halamannya.")
 
         st.markdown("#### 🧐 Ciri yang terdeteksi")
-        ciri = daftar_ciri(url, f)
+        ciri = daftar_ciri(url, host)
         if ciri:
             for ikon, judul, isi in ciri:
                 kartu(ikon, judul, isi)
@@ -293,13 +266,6 @@ if st.button("🔍 Periksa Sekarang", type="primary"):
             kartu("👍", "Nggak ada ciri mencurigakan yang menonjol",
                   "Tetap cek ulang nama domainnya ya, karena penipu juga bisa bikin link yang terlihat rapi.")
         st.caption("Daftar ini adalah pengamatan sederhana terhadap link, bukan penjelasan lengkap cara model mengambil keputusan.")
-
-        if link_panjang:
-            st.warning(
-                "**Catatan:** model ini dilatih sebagian besar dengan link **halaman utama** situs "
-                "(contoh: `https://www.namasitus.com`). Untuk link yang panjang, seperti halaman produk, "
-                "hasil pencarian, atau artikel, hasilnya **bisa keliru**. Karena itu, halaman utamanya juga ikut dicek."
-            )
 
 # ================= BAGIAN 2: EDUKASI =================
 st.divider()
@@ -376,13 +342,14 @@ st.markdown(
 st.divider()
 with st.expander("ℹ️ Tentang aplikasi ini"):
     st.markdown(
-        "**Model:** XGBoost, dilatih dengan 18 fitur yang dihitung dari teks URL saja.\n\n"
+        "**Model:** XGBoost, dilatih dengan 10 fitur yang dihitung **hanya dari nama domain** "
+        "(tanpa `https://`, `www.`, dan halaman), supaya model tidak tertipu pola penulisan link.\n\n"
         "**Dataset:** [PhiUSIIL Phishing URL Dataset (UCI)](https://archive.ics.uci.edu/dataset/967/phiusiil+phishing+url+dataset), "
-        "235.370 URL setelah pembersihan.\n\n"
-        "**Hasil pengujian** (data dibagi berdasarkan domain): akurasi 99,81%, recall phishing 99,58%.\n\n"
-        "**Keterbatasan:** dataset memiliki bias pengumpulan data. Misalnya, seluruh URL legitimate berupa halaman "
-        "utama dan memakai HTTPS. Karena itu, model lemah untuk link panjang. Untuk mengurangi alarm palsu, "
-        "aplikasi juga mengecek halaman utama dari link yang panjang.\n\n"
+        "diolah menjadi 219.016 nama domain unik.\n\n"
+        "**Hasil pengujian** (data dibagi berdasarkan pemilik domain, ambang phishing 30%): "
+        "akurasi 78,19%, recall phishing 60,94%, precision phishing 66,44%.\n\n"
+        "**Keterbatasan:** banyak situs phishing memakai nama domain yang terlihat normal, sehingga sebagian phishing "
+        "tidak terdeteksi. Karena itu hasil hijau berarti \"tidak terdeteksi mencurigakan\", bukan jaminan aman.\n\n"
         "**Dibuat oleh:** 231344049 - Marsya Eka Pratiwi Nugroho"
     )
 
